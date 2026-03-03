@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eco Powder Color Matcher</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 2rem;
+      background: #121417;
+      color: #f1f4f8;
+    }
+
+    .app {
+      max-width: 880px;
+      margin: 0 auto;
+      background: #1b2026;
+      border: 1px solid #2f3742;
+      border-radius: 14px;
+      padding: 1.25rem;
+      box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.45rem;
+    }
+
+    p {
+      color: #b5bfca;
+      line-height: 1.4;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.75rem;
+      align-items: center;
+      margin: 1rem 0;
+    }
+
+    input, button {
+      border: 1px solid #3a4452;
+      border-radius: 10px;
+      background: #141920;
+      color: #f1f4f8;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    button {
+      background: #2b7cff;
+      border-color: #2b7cff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover {
+      filter: brightness(1.08);
+    }
+
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .swatch-card {
+      border: 1px solid #2f3742;
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+
+    .swatch {
+      width: 100%;
+      height: 92px;
+      border-radius: 8px;
+      border: 1px solid rgb(255 255 255 / 20%);
+      margin-bottom: 0.5rem;
+    }
+
+    .mix-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .mix {
+      border: 1px solid #2f3742;
+      border-radius: 10px;
+      padding: 0.7rem;
+      background: #141920;
+    }
+
+    .mix h3 {
+      margin: 0 0 0.25rem;
+      font-size: 1rem;
+    }
+
+    .meta {
+      font-size: 0.88rem;
+      color: #b5bfca;
+    }
+
+    code {
+      display: inline-block;
+      background: #0f1318;
+      border: 1px solid #2f3742;
+      border-radius: 6px;
+      padding: 0.1rem 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Eco Powder Color Matcher</h1>
+    <p>
+      Enter any hex color and this tool brute-forces powder recipes to find the best in-game approximation.
+      It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to 12 scoops.
+    </p>
+
+    <div class="controls">
+      <input id="hexInput" type="text" value="#8A67D4" maxlength="7" aria-label="Hex color" />
+      <input id="picker" type="color" value="#8a67d4" aria-label="Color picker" />
+      <button id="findBtn">Find best mixes</button>
+    </div>
+
+    <div class="swatches">
+      <div class="swatch-card">
+        <div id="targetSwatch" class="swatch"></div>
+        <div>Target: <code id="targetHex"></code> <span id="targetRgb" class="meta"></span></div>
+      </div>
+      <div class="swatch-card">
+        <div id="bestSwatch" class="swatch"></div>
+        <div>Best match: <code id="bestHex"></code> <span id="bestRgb" class="meta"></span></div>
+      </div>
+    </div>
+
+    <section>
+      <strong>Top recipes</strong>
+      <div id="mixResults" class="mix-grid"></div>
+    </section>
+  </main>
+
+  <script>
+    const powders = [
+      { name: 'Red', rgb: [255, 0, 0], item: 'IronOxideItem' },
+      { name: 'Green', rgb: [0, 255, 0], item: 'CopperHydroxideItem' },
+      { name: 'Blue', rgb: [0, 0, 255], item: 'BluePowderItem' },
+      { name: 'Cyan', rgb: [0, 255, 255], item: 'CyanPowderItem' },
+      { name: 'Magenta', rgb: [255, 0, 255], item: 'MagentaPowderItem' },
+      { name: 'Yellow', rgb: [255, 255, 0], item: 'YellowPowderItem' },
+      { name: 'Black', rgb: [0, 0, 0], item: 'CharcoalPowderItem' },
+      { name: 'White', rgb: [255, 255, 255], item: 'WhitePowderItem' }
+    ];
+
+    const MAX_SCOOPS = 12;
+    const MAX_RESULTS = 8;
+
+    function clamp8(v) {
+      return Math.max(0, Math.min(255, Math.round(v)));
+    }
+
+    function rgbToHex([r, g, b]) {
+      return '#' + [r, g, b].map(v => clamp8(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    function hexToRgb(hex) {
+      const clean = hex.trim().replace('#', '');
+      if (!/^[0-9a-fA-F]{6}$/.test(clean)) return null;
+      return [
+        parseInt(clean.slice(0, 2), 16),
+        parseInt(clean.slice(2, 4), 16),
+        parseInt(clean.slice(4, 6), 16)
+      ];
+    }
+
+    function mixFromCounts(counts) {
+      const total = counts.reduce((a, b) => a + b, 0);
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < powders.length; i++) {
+        if (!counts[i]) continue;
+        r += powders[i].rgb[0] * counts[i];
+        g += powders[i].rgb[1] * counts[i];
+        b += powders[i].rgb[2] * counts[i];
+      }
+      return [clamp8(r / total), clamp8(g / total), clamp8(b / total)];
+    }
+
+    function distanceSq(a, b) {
+      const dr = a[0] - b[0];
+      const dg = a[1] - b[1];
+      const db = a[2] - b[2];
+      return dr * dr + dg * dg + db * db;
+    }
+
+    function formatRecipe(counts) {
+      return counts
+        .map((count, i) => count > 0 ? `${powders[i].name} × ${count}` : null)
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    function searchBestMixes(target) {
+      const results = [];
+      const counts = Array(powders.length).fill(0);
+
+      function explore(index, scoopsLeft, used) {
+        if (index === powders.length - 1) {
+          counts[index] = scoopsLeft;
+          if (used + scoopsLeft === 0) return;
+
+          const mixRgb = mixFromCounts(counts);
+          const dist = distanceSq(target, mixRgb);
+          results.push({
+            counts: counts.slice(),
+            rgb: mixRgb,
+            hex: rgbToHex(mixRgb),
+            dist,
+            scoops: used + scoopsLeft
+          });
+          return;
+        }
+
+        for (let n = 0; n <= scoopsLeft; n++) {
+          counts[index] = n;
+          explore(index + 1, scoopsLeft - n, used + n);
+        }
+      }
+
+      for (let total = 1; total <= MAX_SCOOPS; total++) {
+        explore(0, total, 0);
+      }
+
+      results.sort((a, b) => a.dist - b.dist || a.scoops - b.scoops);
+
+      const deduped = [];
+      const seen = new Set();
+      for (const r of results) {
+        const key = `${r.hex}-${r.counts.join('.')}`;
+        if (seen.has(key)) continue;
+        deduped.push(r);
+        seen.add(key);
+        if (deduped.length >= MAX_RESULTS) break;
+      }
+      return deduped;
+    }
+
+    function render(targetRgb, mixes) {
+      const targetHex = rgbToHex(targetRgb);
+      document.getElementById('targetHex').textContent = targetHex;
+      document.getElementById('targetRgb').textContent = `rgb(${targetRgb.join(', ')})`;
+      document.getElementById('targetSwatch').style.background = targetHex;
+
+      const best = mixes[0];
+      document.getElementById('bestHex').textContent = best.hex;
+      document.getElementById('bestRgb').textContent = `rgb(${best.rgb.join(', ')})`;
+      document.getElementById('bestSwatch').style.background = best.hex;
+
+      const container = document.getElementById('mixResults');
+      container.innerHTML = '';
+
+      mixes.forEach((mix, idx) => {
+        const delta = Math.sqrt(mix.dist).toFixed(2);
+        const div = document.createElement('article');
+        div.className = 'mix';
+        div.innerHTML = `
+          <h3>#${idx + 1} ${mix.hex}</h3>
+          <div class="meta">${formatRecipe(mix.counts)}</div>
+          <div class="meta">RGB distance: ${delta}</div>
+          <div class="meta">Total scoops: ${mix.scoops}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function run() {
+      const hexInput = document.getElementById('hexInput');
+      const picker = document.getElementById('picker');
+      const rgb = hexToRgb(hexInput.value);
+      if (!rgb) {
+        hexInput.style.borderColor = '#ef4444';
+        return;
+      }
+
+      hexInput.style.borderColor = '';
+      const normalized = rgbToHex(rgb);
+      hexInput.value = normalized;
+      picker.value = normalized.toLowerCase();
+
+      const mixes = searchBestMixes(rgb);
+      render(rgb, mixes);
+    }
+
+    document.getElementById('findBtn').addEventListener('click', run);
+    document.getElementById('picker').addEventListener('input', (e) => {
+      document.getElementById('hexInput').value = e.target.value.toUpperCase();
+      run();
+    });
+    document.getElementById('hexInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') run();
+    });
+
+    run();
+  </script>
+</body>
+</html>
