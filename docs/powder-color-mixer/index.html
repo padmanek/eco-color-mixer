@@ -45,6 +45,31 @@
       margin: 1rem 0;
     }
 
+    .picker-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.2rem 0.5rem;
+      border: 1px solid #3a4452;
+      border-radius: 10px;
+      background: #141920;
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    #picker {
+      padding: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid #3a4452;
+      cursor: pointer;
+    }
+
+    .picker-wrap .meta {
+      white-space: nowrap;
+    }
+
     input, button {
       border: 1px solid #3a4452;
       border-radius: 10px;
@@ -93,6 +118,33 @@
       margin-top: 1rem;
     }
 
+    .colorants {
+      margin-top: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .colorant {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border: 1px solid #2f3742;
+      border-radius: 8px;
+      padding: 0.4rem 0.5rem;
+      background: #141920;
+      font-size: 0.88rem;
+      color: #b5bfca;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgb(255 255 255 / 30%);
+      flex: none;
+    }
+
     .mix {
       border: 1px solid #2f3742;
       border-radius: 10px;
@@ -123,15 +175,23 @@
   <main class="app">
     <h1>Eco Powder Color Matcher</h1>
     <p>
-      Enter any hex color and this tool brute-forces powder recipes to find the best in-game approximation.
-      It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to 12 scoops.
+      Enter any hex color and this tool searches powder recipes to find the best in-game approximation.
+      It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to 30 powders.
     </p>
 
     <div class="controls">
       <input id="hexInput" type="text" value="#8A67D4" maxlength="7" aria-label="Hex color" />
-      <input id="picker" type="color" value="#8a67d4" aria-label="Color picker" />
+      <label class="picker-wrap">
+        <input id="picker" type="color" value="#8a67d4" aria-label="Color picker" />
+        <span class="meta">Color wheel picker</span>
+      </label>
       <button id="findBtn">Find best mixes</button>
     </div>
+
+    <section>
+      <strong>In-game colorants</strong>
+      <div id="colorants" class="colorants"></div>
+    </section>
 
     <div class="swatches">
       <div class="swatch-card">
@@ -152,18 +212,19 @@
 
   <script>
     const powders = [
-      { name: 'Red', rgb: [255, 0, 0], item: 'IronOxideItem' },
-      { name: 'Green', rgb: [0, 255, 0], item: 'CopperHydroxideItem' },
-      { name: 'Blue', rgb: [0, 0, 255], item: 'BluePowderItem' },
-      { name: 'Cyan', rgb: [0, 255, 255], item: 'CyanPowderItem' },
-      { name: 'Magenta', rgb: [255, 0, 255], item: 'MagentaPowderItem' },
-      { name: 'Yellow', rgb: [255, 255, 0], item: 'YellowPowderItem' },
-      { name: 'Black', rgb: [0, 0, 0], item: 'CharcoalPowderItem' },
-      { name: 'White', rgb: [255, 255, 255], item: 'WhitePowderItem' }
+      { colorant: 'Iron Oxide', item: 'IronOxideItem', rgb: [255, 0, 0] },
+      { colorant: 'Copper Hydroxide', item: 'CopperHydroxideItem', rgb: [0, 255, 0] },
+      { colorant: 'Blue Powder', item: 'BluePowderItem', rgb: [0, 0, 255] },
+      { colorant: 'Cyan Powder', item: 'CyanPowderItem', rgb: [0, 255, 255] },
+      { colorant: 'Magenta Powder', item: 'MagentaPowderItem', rgb: [255, 0, 255] },
+      { colorant: 'Yellow Powder', item: 'YellowPowderItem', rgb: [255, 255, 0] },
+      { colorant: 'Charcoal Powder', item: 'CharcoalPowderItem', rgb: [0, 0, 0] },
+      { colorant: 'White Powder', item: 'WhitePowderItem', rgb: [255, 255, 255] }
     ];
 
-    const MAX_SCOOPS = 12;
+    const MAX_POWDERS = 30;
     const MAX_RESULTS = 8;
+    const BEAM_WIDTH = 3500;
 
     function clamp8(v) {
       return Math.max(0, Math.min(255, Math.round(v)));
@@ -204,43 +265,40 @@
 
     function formatRecipe(counts) {
       return counts
-        .map((count, i) => count > 0 ? `${powders[i].name} × ${count}` : null)
+        .map((count, i) => count > 0 ? `${powders[i].colorant} × ${count}` : null)
         .filter(Boolean)
         .join(', ');
     }
 
     function searchBestMixes(target) {
-      const results = [];
-      const counts = Array(powders.length).fill(0);
+      let beam = [{ counts: Array(powders.length).fill(0), rgb: [0, 0, 0], powders: 0 }];
 
-      function explore(index, scoopsLeft, used) {
-        if (index === powders.length - 1) {
-          counts[index] = scoopsLeft;
-          if (used + scoopsLeft === 0) return;
-
-          const mixRgb = mixFromCounts(counts);
-          const dist = distanceSq(target, mixRgb);
-          results.push({
-            counts: counts.slice(),
-            rgb: mixRgb,
-            hex: rgbToHex(mixRgb),
-            dist,
-            scoops: used + scoopsLeft
-          });
-          return;
+      for (let totalPowders = 1; totalPowders <= MAX_POWDERS; totalPowders++) {
+        const nextBeam = [];
+        for (const state of beam) {
+          for (let i = 0; i < powders.length; i++) {
+            const counts = state.counts.slice();
+            counts[i] += 1;
+            const rgb = mixFromCounts(counts);
+            nextBeam.push({
+              counts,
+              rgb,
+              powders: totalPowders,
+              dist: distanceSq(target, rgb)
+            });
+          }
         }
 
-        for (let n = 0; n <= scoopsLeft; n++) {
-          counts[index] = n;
-          explore(index + 1, scoopsLeft - n, used + n);
-        }
+        nextBeam.sort((a, b) => a.dist - b.dist);
+        beam = nextBeam.slice(0, BEAM_WIDTH);
       }
 
-      for (let total = 1; total <= MAX_SCOOPS; total++) {
-        explore(0, total, 0);
-      }
+      const results = beam.map((mix) => ({
+        ...mix,
+        hex: rgbToHex(mix.rgb)
+      }));
 
-      results.sort((a, b) => a.dist - b.dist || a.scoops - b.scoops);
+      results.sort((a, b) => a.dist - b.dist || a.powders - b.powders);
 
       const deduped = [];
       const seen = new Set();
@@ -276,9 +334,20 @@
           <h3>#${idx + 1} ${mix.hex}</h3>
           <div class="meta">${formatRecipe(mix.counts)}</div>
           <div class="meta">RGB distance: ${delta}</div>
-          <div class="meta">Total scoops: ${mix.scoops}</div>
+          <div class="meta">Total powders: ${mix.powders}</div>
         `;
         container.appendChild(div);
+      });
+    }
+
+    function renderColorants() {
+      const list = document.getElementById('colorants');
+      list.innerHTML = '';
+      powders.forEach((powder) => {
+        const row = document.createElement('div');
+        row.className = 'colorant';
+        row.innerHTML = `<span class="dot" style="background:${rgbToHex(powder.rgb)}"></span>${powder.colorant} <code>${powder.item}</code>`;
+        list.appendChild(row);
       });
     }
 
@@ -309,6 +378,7 @@
       if (e.key === 'Enter') run();
     });
 
+    renderColorants();
     run();
   </script>
 </body>

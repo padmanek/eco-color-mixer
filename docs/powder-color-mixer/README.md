@@ -4,8 +4,8 @@ Static single-page app intended for GitHub Pages hosting.
 
 ## What it does
 
-- Accepts a target hex color.
-- Searches combinations of Eco's 8 paint colorants up to 12 total scoops.
+- Accepts a target hex color or a mouse-driven color wheel picker.
+- Searches combinations of Eco's 8 paint colorants up to 30 total powders.
 - Returns top approximate mixes sorted by RGB distance.
 
 ## Local run
