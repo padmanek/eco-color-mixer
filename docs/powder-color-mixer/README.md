@@ -5,8 +5,8 @@ Static single-page app intended for GitHub Pages hosting.
 ## What it does
 
 - Accepts a target hex color or a mouse-driven color wheel picker.
-- Searches combinations of Eco's 8 paint colorants up to 30 total powders.
-- Lets users choose max different powders per recipe, capped to the in-game colorant count (8 from `ColorMixer.PossibleColorants`).
+- Searches combinations of Eco's 8 paint colorants up to a user-selected total powder limit.
+- Lets users choose max total powders per recipe (default 8), capped to the in-game mixing limit (100).
 - Returns top approximate mixes sorted by RGB distance.
 
 ## Local run

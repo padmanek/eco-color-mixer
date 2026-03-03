@@ -78,7 +78,7 @@
       flex-wrap: wrap;
     }
 
-    #maxDifferentPowders {
+    #maxTotalPowders {
       width: 5rem;
       text-align: center;
     }
@@ -189,7 +189,7 @@
     <h1>Eco Powder Color Matcher</h1>
     <p>
       Enter any hex color and this tool searches powder recipes to find the best in-game approximation.
-      It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to 30 powders.
+      It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to your chosen total powder count.
     </p>
 
     <div class="controls">
@@ -202,8 +202,8 @@
     </div>
 
     <div class="search-options">
-      <label for="maxDifferentPowders">Max different powders:</label>
-      <input id="maxDifferentPowders" type="number" min="1" step="1" />
+      <label for="maxTotalPowders">Max total powders:</label>
+      <input id="maxTotalPowders" type="number" min="1" step="1" />
       <span id="powderCapMeta" class="meta"></span>
     </div>
 
@@ -241,10 +241,13 @@
       { colorant: 'White Powder', item: 'WhitePowderItem', rgb: [255, 255, 255] }
     ];
 
-    const MAX_POWDERS = 30;
+    const DEFAULT_MAX_TOTAL_POWDERS = 8;
     const MAX_RESULTS = 8;
     const BEAM_WIDTH = 3500;
-    const GAME_MAX_DIFFERENT_POWDERS = powders.length; // matches ColorMixer.PossibleColorants count in game code
+    // From game code: MaxBucketPerIteration = PaintBucketItem.MaxStackSize * 5,
+    // and requiredBucketCount = PaintBucketCountForConsumptionIncrease(5) * totalIngredientsCount.
+    // Therefore totalIngredientsCount is capped by PaintBucketItem.MaxStackSize (default 100).
+    const GAME_MAX_TOTAL_POWDERS = 100;
 
     function clamp8(v) {
       return Math.max(0, Math.min(255, Math.round(v)));
@@ -290,28 +293,23 @@
         .join(', ');
     }
 
-    function searchBestMixes(target, maxDifferentPowders) {
-      let beam = [{ counts: Array(powders.length).fill(0), rgb: [0, 0, 0], powders: 0, distinct: 0, dist: distanceSq(target, [0, 0, 0]) }];
+    function searchBestMixes(target, maxTotalPowders) {
+      let beam = [{ counts: Array(powders.length).fill(0), rgb: [0, 0, 0], powders: 0, dist: distanceSq(target, [0, 0, 0]) }];
       const candidates = [];
 
-      for (let totalPowders = 1; totalPowders <= MAX_POWDERS; totalPowders++) {
+      for (let totalPowders = 1; totalPowders <= maxTotalPowders; totalPowders++) {
         const nextBeam = [];
         for (const state of beam) {
           for (let i = 0; i < powders.length; i++) {
-            const alreadyUsed = state.counts[i] > 0;
-            if (!alreadyUsed && state.distinct >= maxDifferentPowders) continue;
-
             const counts = state.counts.slice();
             counts[i] += 1;
             const rgb = mixFromCounts(counts);
-            const distinct = alreadyUsed ? state.distinct : state.distinct + 1;
             const dist = distanceSq(target, rgb);
 
             const mix = {
               counts,
               rgb,
               powders: totalPowders,
-              distinct,
               dist,
               hex: rgbToHex(rgb)
             };
@@ -325,7 +323,7 @@
         beam = nextBeam.slice(0, BEAM_WIDTH);
       }
 
-      candidates.sort((a, b) => a.dist - b.dist || a.powders - b.powders || a.distinct - b.distinct);
+      candidates.sort((a, b) => a.dist - b.dist || a.powders - b.powders);
 
       const deduped = [];
       const seen = new Set();
@@ -392,14 +390,14 @@
       hexInput.value = normalized;
       picker.value = normalized.toLowerCase();
 
-      const maxDifferentInput = document.getElementById('maxDifferentPowders');
-      const requested = parseInt(maxDifferentInput.value, 10);
-      const maxDifferentPowders = Number.isFinite(requested)
-        ? Math.max(1, Math.min(GAME_MAX_DIFFERENT_POWDERS, requested))
-        : GAME_MAX_DIFFERENT_POWDERS;
-      maxDifferentInput.value = String(maxDifferentPowders);
+      const maxTotalInput = document.getElementById('maxTotalPowders');
+      const requested = parseInt(maxTotalInput.value, 10);
+      const maxTotalPowders = Number.isFinite(requested)
+        ? Math.max(1, Math.min(GAME_MAX_TOTAL_POWDERS, requested))
+        : DEFAULT_MAX_TOTAL_POWDERS;
+      maxTotalInput.value = String(maxTotalPowders);
 
-      const mixes = searchBestMixes(rgb, maxDifferentPowders);
+      const mixes = searchBestMixes(rgb, maxTotalPowders);
       render(rgb, mixes);
     }
 
@@ -427,12 +425,12 @@
       if (e.key === 'Enter') run();
     });
 
-    const maxDifferentInput = document.getElementById('maxDifferentPowders');
-    maxDifferentInput.max = String(GAME_MAX_DIFFERENT_POWDERS);
-    maxDifferentInput.value = String(GAME_MAX_DIFFERENT_POWDERS);
-    document.getElementById('powderCapMeta').textContent = `Game cap: ${GAME_MAX_DIFFERENT_POWDERS} different powders (from ColorMixer.PossibleColorants)`;
+    const maxTotalInput = document.getElementById('maxTotalPowders');
+    maxTotalInput.max = String(GAME_MAX_TOTAL_POWDERS);
+    maxTotalInput.value = String(DEFAULT_MAX_TOTAL_POWDERS);
+    document.getElementById('powderCapMeta').textContent = `Game cap: ${GAME_MAX_TOTAL_POWDERS} total powders (from MixingComponent limits)`;
 
-    maxDifferentInput.addEventListener('change', () => run());
+    maxTotalInput.addEventListener('change', () => run());
 
     renderColorants();
     run();
