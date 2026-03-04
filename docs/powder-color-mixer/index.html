@@ -45,6 +45,20 @@
       margin: 1rem 0;
     }
 
+    @media (max-width: 700px) {
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .controls > * {
+        width: 100%;
+      }
+
+      .picker-wrap {
+        justify-content: flex-start;
+      }
+    }
+
     .picker-wrap {
       display: flex;
       align-items: center;
@@ -170,6 +184,12 @@
       font-size: 1rem;
     }
 
+    .recipe-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
     .meta {
       font-size: 0.88rem;
       color: #b5bfca;
@@ -289,8 +309,7 @@
     function formatRecipe(counts) {
       return counts
         .map((count, i) => count > 0 ? `${powders[i].colorant} × ${count}` : null)
-        .filter(Boolean)
-        .join(', ');
+        .filter(Boolean);
     }
 
     function searchBestMixes(target, maxTotalPowders) {
@@ -355,9 +374,12 @@
         const delta = Math.sqrt(mix.dist).toFixed(2);
         const div = document.createElement('article');
         div.className = 'mix';
+        const recipeRows = formatRecipe(mix.counts)
+          .map(recipe => `<div>${recipe}</div>`)
+          .join('');
         div.innerHTML = `
           <h3>#${idx + 1} ${mix.hex}</h3>
-          <div class="meta">${formatRecipe(mix.counts)}</div>
+          <div class="meta recipe-lines">${recipeRows}</div>
           <div class="meta">RGB distance: ${delta}</div>
           <div class="meta">Total powders: ${mix.powders}</div>
         `;
@@ -371,7 +393,7 @@
       powders.forEach((powder) => {
         const row = document.createElement('div');
         row.className = 'colorant';
-        row.innerHTML = `<span class="dot" style="background:${rgbToHex(powder.rgb)}"></span>${powder.colorant} <code>${powder.item}</code>`;
+        row.innerHTML = `<span class="dot" style="background:${rgbToHex(powder.rgb)}"></span>${powder.colorant}`;
         list.appendChild(row);
       });
     }
