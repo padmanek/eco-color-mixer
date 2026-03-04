@@ -39,13 +39,27 @@
 
     .controls {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 0.75rem;
       align-items: center;
       margin: 1rem 0;
     }
 
+    #hexInput {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
     @media (max-width: 700px) {
+      body {
+        padding: 0.75rem;
+      }
+
+      .app {
+        max-width: 100%;
+      }
+
       .controls {
         grid-template-columns: 1fr;
       }
@@ -162,6 +176,15 @@
       background: #141920;
       font-size: 0.88rem;
       color: #b5bfca;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .colorant.disabled {
+      opacity: 0.45;
+      text-decoration: line-through;
+      border-color: #5b6573;
     }
 
     .dot {
@@ -312,14 +335,16 @@
         .filter(Boolean);
     }
 
-    function searchBestMixes(target, maxTotalPowders) {
+    function searchBestMixes(target, maxTotalPowders, allowedPowderIndices) {
+      if (!allowedPowderIndices.length) return [];
+
       let beam = [{ counts: Array(powders.length).fill(0), rgb: [0, 0, 0], powders: 0, dist: distanceSq(target, [0, 0, 0]) }];
       const candidates = [];
 
       for (let totalPowders = 1; totalPowders <= maxTotalPowders; totalPowders++) {
         const nextBeam = [];
         for (const state of beam) {
-          for (let i = 0; i < powders.length; i++) {
+          for (const i of allowedPowderIndices) {
             const counts = state.counts.slice();
             counts[i] += 1;
             const rgb = mixFromCounts(counts);
@@ -362,13 +387,25 @@
       document.getElementById('targetRgb').textContent = `rgb(${targetRgb.join(', ')})`;
       document.getElementById('targetSwatch').style.background = targetHex;
 
+      const container = document.getElementById('mixResults');
+      container.innerHTML = '';
+
+      if (!mixes.length) {
+        document.getElementById('bestHex').textContent = '-';
+        document.getElementById('bestRgb').textContent = 'No available recipe with current colorants';
+        document.getElementById('bestSwatch').style.background = 'transparent';
+
+        const empty = document.createElement('article');
+        empty.className = 'mix';
+        empty.innerHTML = `<div class="meta">Enable at least one colorant to calculate recipes.</div>`;
+        container.appendChild(empty);
+        return;
+      }
+
       const best = mixes[0];
       document.getElementById('bestHex').textContent = best.hex;
       document.getElementById('bestRgb').textContent = `rgb(${best.rgb.join(', ')})`;
       document.getElementById('bestSwatch').style.background = best.hex;
-
-      const container = document.getElementById('mixResults');
-      container.innerHTML = '';
 
       mixes.forEach((mix, idx) => {
         const delta = Math.sqrt(mix.dist).toFixed(2);
@@ -387,13 +424,23 @@
       });
     }
 
+    const disabledPowders = new Set();
+
     function renderColorants() {
       const list = document.getElementById('colorants');
       list.innerHTML = '';
-      powders.forEach((powder) => {
-        const row = document.createElement('div');
-        row.className = 'colorant';
+      powders.forEach((powder, index) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = `colorant${disabledPowders.has(index) ? ' disabled' : ''}`;
+        row.setAttribute('aria-pressed', String(!disabledPowders.has(index)));
         row.innerHTML = `<span class="dot" style="background:${rgbToHex(powder.rgb)}"></span>${powder.colorant}`;
+        row.addEventListener('click', () => {
+          if (disabledPowders.has(index)) disabledPowders.delete(index);
+          else disabledPowders.add(index);
+          renderColorants();
+          run();
+        });
         list.appendChild(row);
       });
     }
@@ -419,7 +466,11 @@
         : DEFAULT_MAX_TOTAL_POWDERS;
       maxTotalInput.value = String(maxTotalPowders);
 
-      const mixes = searchBestMixes(rgb, maxTotalPowders);
+      const allowedPowderIndices = powders
+        .map((_, i) => i)
+        .filter(i => !disabledPowders.has(i));
+
+      const mixes = searchBestMixes(rgb, maxTotalPowders, allowedPowderIndices);
       render(rgb, mixes);
     }
 
