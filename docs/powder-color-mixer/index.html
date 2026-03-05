@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eco Powder Color Matcher</title>
+  <title>Eco Color Mixer</title>
   <style>
     :root {
       color-scheme: dark;
@@ -229,7 +229,7 @@
 </head>
 <body>
   <main class="app">
-    <h1>Eco Powder Color Matcher</h1>
+    <h1>Eco Color Mixer</h1>
     <p>
       Enter any hex color and this tool searches powder recipes to find the best in-game approximation.
       It uses the eight game colorants from <code>ColorMixer.PossibleColorants</code> and searches mixes up to your chosen total powder count.
@@ -291,6 +291,51 @@
     // and requiredBucketCount = PaintBucketCountForConsumptionIncrease(5) * totalIngredientsCount.
     // Therefore totalIngredientsCount is capped by PaintBucketItem.MaxStackSize (default 100).
     const GAME_MAX_TOTAL_POWDERS = 100;
+    const MAX_RGB_DISTANCE = Math.sqrt(3 * 255 * 255);
+
+    const ECO_BASE_COLORS = [
+      { name: 'Red', rgb: [255, 0, 0] },
+      { name: 'Green', rgb: [0, 255, 0] },
+      { name: 'Blue', rgb: [0, 0, 255] },
+      { name: 'White', rgb: [255, 255, 255] },
+      { name: 'Black', rgb: [0, 0, 0] },
+      { name: 'Yellow', rgb: [255, 255, 0] },
+      { name: 'Magenta', rgb: [255, 0, 255] },
+      { name: 'Cyan', rgb: [0, 255, 255] },
+      { name: 'Purple', rgb: [128, 0, 128] },
+      { name: 'Orange', rgb: [255, 165, 0] },
+      { name: 'Pink', rgb: [255, 105, 180] },
+      { name: 'Brown', rgb: [139, 69, 19] },
+      { name: 'Gray', rgb: [128, 128, 128] },
+      { name: 'Turquoise', rgb: [0, 206, 209] },
+      { name: 'Lavender', rgb: [230, 230, 250] },
+      { name: 'Maroon', rgb: [128, 0, 0] },
+      { name: 'Teal', rgb: [0, 128, 128] },
+      { name: 'Gold', rgb: [255, 215, 0] },
+      { name: 'Silver', rgb: [192, 192, 192] },
+      { name: 'Olive', rgb: [128, 128, 0] },
+      { name: 'Peach', rgb: [255, 218, 185] },
+      { name: 'Charcoal', rgb: [54, 69, 79] },
+      { name: 'Indigo', rgb: [75, 0, 130] },
+      { name: 'Rose', rgb: [255, 0, 127] },
+      { name: 'Lemon', rgb: [255, 250, 205] },
+      { name: 'Beige', rgb: [245, 245, 220] },
+      { name: 'Brick', rgb: [156, 102, 31] },
+      { name: 'ForestGreen', rgb: [34, 139, 34] },
+      { name: 'Coral', rgb: [255, 127, 80] },
+      { name: 'Navy', rgb: [0, 0, 128] },
+      { name: 'Orchid', rgb: [218, 112, 214] },
+      { name: 'Mustard', rgb: [255, 255, 0] },
+      { name: 'Slate', rgb: [112, 128, 144] },
+      { name: 'Ruby', rgb: [224, 17, 95] },
+      { name: 'Mint', rgb: [173, 255, 47] },
+      { name: 'Chocolate', rgb: [139, 69, 19] },
+      { name: 'Plum', rgb: [139, 102, 139] },
+      { name: 'Tangerine', rgb: [255, 127, 0] },
+      { name: 'SkyBlue', rgb: [135, 206, 235] },
+      { name: 'Sienna', rgb: [160, 82, 45] },
+      { name: 'Ivory', rgb: [255, 255, 240] }
+    ];
 
     function clamp8(v) {
       return Math.max(0, Math.min(255, Math.round(v)));
@@ -327,6 +372,78 @@
       const dg = a[1] - b[1];
       const db = a[2] - b[2];
       return dr * dr + dg * dg + db * db;
+    }
+
+    function hue([r, g, b]) {
+      const rn = r / 255;
+      const gn = g / 255;
+      const bn = b / 255;
+      const max = Math.max(rn, gn, bn);
+      const min = Math.min(rn, gn, bn);
+      const d = max - min;
+      if (d === 0) return 0;
+      let h;
+      if (max === rn) h = ((gn - bn) / d) % 6;
+      else if (max === gn) h = (bn - rn) / d + 2;
+      else h = (rn - gn) / d + 4;
+      return (h * 60 + 360) % 360;
+    }
+
+    function lerpRgb(a, b, t) {
+      return [
+        clamp8(a[0] + (b[0] - a[0]) * t),
+        clamp8(a[1] + (b[1] - a[1]) * t),
+        clamp8(a[2] + (b[2] - a[2]) * t)
+      ];
+    }
+
+    function generateEcoNamedColors() {
+      const blendsBetweenPair = 3;
+      const blendColorMinDifference = 10;
+      const blendsMaxRange = 0.3;
+      const blendStepAmount = blendsMaxRange / blendsBetweenPair;
+
+      const allColors = [];
+      ECO_BASE_COLORS.forEach((baseColor) => {
+        let blends = [];
+        ECO_BASE_COLORS.forEach((otherColor) => {
+          if (baseColor.name === otherColor.name) return;
+          for (let i = 0; i < blendsBetweenPair; i++) {
+            const blendAmount = (i + 1) * blendStepAmount;
+            const blendRgb = lerpRgb(baseColor.rgb, otherColor.rgb, blendAmount);
+            const exists = blends.some(c => Math.sqrt(distanceSq(c.rgb, blendRgb)) <= blendColorMinDifference);
+            if (!exists) blends.push({ name: baseColor.name, rgb: blendRgb, blend: 0 });
+          }
+        });
+
+        blends = blends.sort((a, b) => hue(a.rgb) - hue(b.rgb));
+        blends = blends.map((color, idx) => ({ ...color, blend: idx + 1 }));
+        blends.unshift({ name: baseColor.name, rgb: baseColor.rgb, blend: 0 });
+        allColors.push(...blends);
+      });
+
+      return allColors;
+    }
+
+    const ECO_NAMED_COLORS = generateEcoNamedColors();
+
+    function getEcoColorName(rgb) {
+      let best = ECO_NAMED_COLORS[0];
+      let bestDistance = Infinity;
+      for (const candidate of ECO_NAMED_COLORS) {
+        const dist = distanceSq(rgb, candidate.rgb);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          best = candidate;
+        }
+      }
+
+      return best.blend === 0 ? best.name : `${best.name} #${String(best.blend).padStart(3, '0')}`;
+    }
+
+    function toMatchPercent(distance) {
+      const match = Math.max(0, 100 * (1 - distance / MAX_RGB_DISTANCE));
+      return `${match.toFixed(2)}%`;
     }
 
     function formatRecipe(counts) {
@@ -403,21 +520,23 @@
       }
 
       const best = mixes[0];
-      document.getElementById('bestHex').textContent = best.hex;
+      document.getElementById('bestHex').textContent = `${best.hex} · ${getEcoColorName(best.rgb)}`;
       document.getElementById('bestRgb').textContent = `rgb(${best.rgb.join(', ')})`;
       document.getElementById('bestSwatch').style.background = best.hex;
 
       mixes.forEach((mix, idx) => {
-        const delta = Math.sqrt(mix.dist).toFixed(2);
+        const distance = Math.sqrt(mix.dist);
+        const matchPercent = toMatchPercent(distance);
+        const colorName = getEcoColorName(mix.rgb);
         const div = document.createElement('article');
         div.className = 'mix';
         const recipeRows = formatRecipe(mix.counts)
           .map(recipe => `<div>${recipe}</div>`)
           .join('');
         div.innerHTML = `
-          <h3>#${idx + 1} ${mix.hex}</h3>
+          <h3>#${idx + 1} ${mix.hex} · ${colorName}</h3>
           <div class="meta recipe-lines">${recipeRows}</div>
-          <div class="meta">RGB distance: ${delta}</div>
+          <div class="meta">Match: ${matchPercent}</div>
           <div class="meta">Total powders: ${mix.powders}</div>
         `;
         container.appendChild(div);
