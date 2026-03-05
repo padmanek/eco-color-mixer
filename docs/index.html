@@ -484,9 +484,20 @@
       return best.blend === 0 ? best.name : `${best.name} #${String(best.blend).padStart(3, '0')}`;
     }
 
+    function toMatchValue(distance) {
+      return Math.max(0, 100 * (1 - distance / MAX_RGB_DISTANCE));
+    }
+
     function toMatchPercent(distance) {
-      const match = Math.max(0, 100 * (1 - distance / MAX_RGB_DISTANCE));
-      return `${match.toFixed(2)}%`;
+      return `${toMatchValue(distance).toFixed(2)}%`;
+    }
+
+    function toMatchBucket(distance) {
+      return Math.round(toMatchValue(distance) * 100);
+    }
+
+    function countUniquePowders(counts) {
+      return counts.filter(count => count > 0).length;
     }
 
     function formatRecipe(counts) {
@@ -514,6 +525,8 @@
               counts,
               rgb,
               powders: totalPowders,
+              uniquePowders: countUniquePowders(counts),
+              matchBucket: toMatchBucket(Math.sqrt(dist)),
               dist,
               hex: rgbToHex(rgb)
             };
@@ -527,7 +540,12 @@
         beam = nextBeam.slice(0, BEAM_WIDTH);
       }
 
-      candidates.sort((a, b) => a.dist - b.dist || a.powders - b.powders);
+      candidates.sort((a, b) =>
+        b.matchBucket - a.matchBucket ||
+        a.uniquePowders - b.uniquePowders ||
+        a.dist - b.dist ||
+        a.powders - b.powders
+      );
 
       const deduped = [];
       const seen = new Set();
