@@ -225,6 +225,38 @@
       border-radius: 6px;
       padding: 0.1rem 0.35rem;
     }
+
+    .support {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid #2f3742;
+      text-align: center;
+    }
+
+    .support a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      text-decoration: none;
+      color: #ffe8a3;
+      background: linear-gradient(135deg, #202734, #2a3342);
+      border: 1px solid #3f4b5e;
+      border-radius: 999px;
+      padding: 0.5rem 0.9rem;
+      font-weight: 600;
+      transition: transform 0.12s ease, filter 0.12s ease;
+    }
+
+    .support a:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .kofi-logo {
+      font-size: 1.05rem;
+      line-height: 1;
+    }
+
   </style>
 </head>
 <body>
@@ -270,6 +302,14 @@
       <strong>Top recipes</strong>
       <div id="mixResults" class="mix-grid"></div>
     </section>
+
+
+    <footer class="support">
+      <a href="https://ko-fi.com/padman" target="_blank" rel="noopener noreferrer">
+        <span class="kofi-logo" aria-hidden="true">☕</span>
+        <span>Like the project? Buy me a coffee on Ko-fi</span>
+      </a>
+    </footer>
   </main>
 
   <script>
